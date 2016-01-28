@@ -1,0 +1,19 @@
+0 info it worked if it ends with ok
+1 verbose cli [ 'node', '/usr/bin/npm', 'start' ]
+2 info using npm@3.5.3
+3 info using node@v0.10.41
+4 verbose node symlink /usr/bin/node
+5 verbose stack Error: ENOENT, open '/home/ubuntu/Project/package.json'
+6 verbose cwd /home/ubuntu/Project
+7 error Linux 3.13.0-74-generic
+8 error argv "node" "/usr/bin/npm" "start"
+9 error node v0.10.41
+10 error npm  v3.5.3
+11 error path /home/ubuntu/Project/package.json
+12 error code ENOENT
+13 error errno 34
+14 error enoent ENOENT, open '/home/ubuntu/Project/package.json'
+15 error enoent ENOENT, open '/home/ubuntu/Project/package.json'
+15 error enoent This is most likely not a problem with npm itself
+15 error enoent and is related to npm not being able to find a file.
+16 verbose exit [ 34, true ]
