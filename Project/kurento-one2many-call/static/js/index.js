@@ -1,26 +1,18 @@
-/*
- * (C) Copyright 2014-2015 Kurento (http://kurento.org/)
- *
- * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the GNU Lesser General Public License
- * (LGPL) version 2.1 which accompanies this distribution, and is available at
- * http://www.gnu.org/licenses/lgpl-2.1.html
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- */
 
 var ws = new WebSocket('wss://' + location.host + '/one2many');
 var video;
 var screen;
-var webRtcPeer;
+var webRtcPeerCam;
+var webRtcPeerScreen;
 // variables for getScreenConstraint fnc()
 var chromeMediaSource = 'screen';
 //var sourceId;
 var extensionInstalled = false;
+var pSdpOfferCam=null;
+var pSdpOfferScreen=null;
+var vSdpOfferCam=null;
+var vSdpOfferScreen=null;
+
 
 window.onload = function() {
 	console = new Console();
@@ -151,8 +143,11 @@ ws.onmessage = function(message) {
 	case 'stopCommunication':
 		dispose();
 		break;
-	case 'iceCandidate':
-		webRtcPeer.addIceCandidate(parsedMessage.candidate)
+	case 'iceCandidateCam':
+		webRtcPeerCam.addIceCandidate(parsedMessage.candidate);
+		break;
+	case 'iceCandidateScreen':
+		webRtcPeerScreen.addIceCandidate(parsedMessage.candidate);
 		break;
 	default:
 		console.error('Unrecognized message', parsedMessage);
@@ -164,8 +159,11 @@ function presenterResponse(message) {
 		var errorMsg = message.message ? message.message : 'Unknow error';
 		console.warn('Call not accepted for the following reason: ' + errorMsg);
 		dispose();
-	} else {
-		webRtcPeer.processAnswer(message.sdpAnswer);
+	} else{
+		console.log("Presenter sdpAnswer Cam: "+ message.pSdpAnswerCam);
+		webRtcPeerCam.processAnswer(message.pSdpAnswerCam);
+		console.log("Presenter sdpAnswer Screen: "+ message.pSdpAnswerScreen);
+		webRtcPeerScreen.processAnswer(message.pSdpAnswerScreen);
 	}
 }
 
@@ -175,85 +173,25 @@ function viewerResponse(message) {
 		console.warn('Call not accepted for the following reason: ' + errorMsg);
 		dispose();
 	} else {
-		webRtcPeer.processAnswer(message.sdpAnswer);
+		console.log("Viewer sdpAnswer Cam: "+ message.vSdpAnswerCam);
+		webRtcPeerCam.processAnswer(message.vSdpAnswerCam);
+		console.log("Viewerd sdpAnswer Screen: "+ message.vSdpAnswerScreen);
+		webRtcPeerScreen.processAnswer(message.vSdpAnswerScreen);
 	}
 }
 
 function presenter() {
 	
-	if (!webRtcPeer) {
+	if (!webRtcPeerCam&!webRtcPeerScreen) {
 		showSpinner(video);
 
-		var options = {
+		var options1 = {
 			localVideo: video,
-			onicecandidate : onIceCandidate
+			onicecandidate : onIceCandidateCam
 	    }
-
-		webRtcPeer = kurentoUtils.WebRtcPeer.WebRtcPeerSendonly(options, function(error) {
-			if(error) return onError(error);
-
-			this.generateOffer(onOfferPresenter);
-		});
 		
-		//startScreenStreamFrom();
-	}
-}/*
-		if(!webRtcPeer){
-		showSpinner(video);
-		var options = {
-			localVideo: video,
-			oniceCandidate : onIceCandidate,
-			mediaConstraints:{
-			audio: true,
-			video:{
-				mandatory:{
-					maxWidth: window.screen.width,
-        			maxHeight: window.screen.height
-				},
-				mediaSource: 'desktop',
-				chromeMediaSource: 'screen',
-			}	
-		}
-	}
-	webRtcPeer = kurentoUtils.WebRtcPeer.WebRtcPeerSendonly(options, function(error) {
-			if(error) return onError(error);
-
-			this.generateOffer(onOfferPresenter);
-		});
-	}*/
-
-
-function onOfferPresenter(error, offerSdp) {
-    if (error) return onError(error);
-
-	var message = {
-		id : 'presenter',
-		sdpOffer : offerSdp
-	};
-	sendMessage(message);
-}
-
-function viewer() {
-	if (!webRtcPeer) {
-		showSpinner(video);
-
-		var options = {
-			remoteVideo: screen,
-			onicecandidate : onIceCandidate
-		}
-
-		webRtcPeer = kurentoUtils.WebRtcPeer.WebRtcPeerRecvonly(options, function(error) {
-			if(error) return onError(error);
-
-			this.generateOffer(onOfferViewer);
-		});
-	}
-}
-
-//streamId for streaming
-function startScreenStreamFrom() {
-
-   getSourceId(function(sourceId){
+		//Screen Share initiation
+		getSourceId(function(sourceId){
 		
 		var screen_constraints = {
 			audio:false,
@@ -268,21 +206,96 @@ function startScreenStreamFrom() {
 			}
 		}
 			
+		console.log("xxxx-sourceID:"+ JSON.stringify(sourceId, null, 4));
+		console.log("xxxx-constraints:"+ JSON.stringify(screen_constraints, null, 4));
+			
+			
+	var options2 = {
+				   localVideo : screen,
+				   onicecandidate : onIceCandidateScreen,
+				   mediaConstraints : screen_constraints,
+				   sendSource : 'screen'
+			 	};
+			 	
+			 	webRtcPeerCam = kurentoUtils.WebRtcPeer.WebRtcPeerSendonly(options1, function(error) {
+					if(error) return onError(error);
+					this.generateOffer(onOfferPresenterCam);
+				
+				});
+				
+			 	webRtcPeerScreen = kurentoUtils.WebRtcPeer.WebRtcPeerSendonly(options2, function(error) {
+					if(error) return onError(error);
+					this.generateOffer(onOfferPresenterScreen);	
+				});
+		});		
+		
+	}
+}
+
+
+
+function viewer() {
+	if (!webRtcPeerCam) {
+		showSpinner(video);
+		showSpinner(screen);
+
+		var options1 = {
+			remoteVideo: video,
+			onicecandidate : onIceCandidateCam
+		}
+	
+		var options2 = {
+			remoteVideo: screen,
+			onicecandidate : onIceCandidateScreen
+		}
+		
+		webRtcPeerCam = kurentoUtils.WebRtcPeer.WebRtcPeerRecvonly(options1, function(error) {
+			if(error) return onError(error);
+			
+			this.generateOffer(onOfferViewerCam);
+		});
+		
+		webRtcPeerScreen = kurentoUtils.WebRtcPeer.WebRtcPeerRecvonly(options2, function(error) {
+			if(error) return onError(error);
+
+			this.generateOffer(onOfferViewerScreen);
+		});	
+	}
+}
+
+//streamId for streaming
+function startScreenStreamFrom() {
+
+   getSourceId(function(sourceId){
+		
+		var screen_constraints = {
+			audio:false,
+			video:{
+				mandatory:{
+					chromeMediaSource: 'screen',// error ? 'screen' : 'desktop',
+					maxWidth: 1920,
+					maxHeight: 1080,
+					chromeMediaSourceId: sourceId
+				},
+				optional:[]
+			}
+		}
+			
 			console.log("xxxx-sourceID:"+ JSON.stringify(sourceId, null, 4));
 			console.log("xxxx-constraints:"+ JSON.stringify(screen_constraints, null, 4));
 			
 			
 		var options = {
 				   localVideo : screen,
-				   onicecandidate : onIceCandidate,
+				   onicecandidate : onIceCandidateScreen,
 				   mediaConstraints : screen_constraints,
 				   sendSource : 'screen'
 			 	};
 			
-				webRtcPeer = kurentoUtils.WebRtcPeer.WebRtcPeerSendonly(options, function(error) {
+				webRtcPeerCam = kurentoUtils.WebRtcPeer.WebRtcPeerSendonly(options, function(error) {
 					if(error) return onError(error);
 		
-					this.generateOffer(onOfferPresenter);
+					this.generateOffer(onOfferPresenterCam);
 				});
 			
 			});
@@ -290,31 +303,90 @@ function startScreenStreamFrom() {
 			var constraints = window.getScreenShare;
 			console.log("Constrains to be passed:"+ JSON.stringify(constraints, null, 4));
 			console.log("Constrains Extension installed:"+ JSON.stringify(extensionInstalled, null, 4));
+}
+
+
+function onOfferPresenterCam(error, offerSdp) {
+    if (error) return onError(error);
+    
+	console.log("Presenter offer Cam: " + offerSdp);
+	pSdpOfferCam=offerSdp;		
+	
+	sendPresenterOffer(pSdpOfferCam, pSdpOfferScreen);
+
+}
+
+function onOfferPresenterScreen(error, offerSdp) {
+    if (error) return onError(error);
+    
+	console.log("Presenter offer Screen: " + offerSdp);
+	pSdpOfferScreen=offerSdp;
+		
+		
+}
+
+function sendPresenterOffer(cam, screen){
+	
+		var message = {
+			id : 'presenter',
+			pSdpOfferCam : cam,
+			pSdpOfferScreen : screen
+			
+		};	
+		sendMessage(message);
+}
+
+function onOfferViewerCam(error, offerSdp) {
+	if (error) return onError(error)
+
+	console.log("Viewer offer Cam: " + offerSdp);
+	vSdpOfferCam=offerSdp;
+	
 	
 }
 
-function onOfferViewer(error, offerSdp) {
+function onOfferViewerScreen(error, offerSdp) {
 	if (error) return onError(error)
 
-	var message = {
-		id : 'viewer',
-		sdpOffer : offerSdp
-	}
-	sendMessage(message);
+	console.log("Viewer offer Screen: " + offerSdp);
+	vSdpOfferScreen=offerSdp;
+	sendViewerOffer(vSdpOfferCam, vSdpOfferScreen);
+	
 }
 
-function onIceCandidate(candidate) {
-	   console.log('Local candidate' + JSON.stringify(candidate));
+function sendViewerOffer(cam, screen){
+	
+	var message = {
+		id : 'viewer',
+		vSdpOfferCam : cam,
+		vSdpOfferScreen : screen
+	}
+	sendMessage(message);
+	
+}
+
+function onIceCandidateCam(candidate) {
+	   console.log('Local camera candidate' + JSON.stringify(candidate));
 
 	   var message = {
-	      id : 'onIceCandidate',
+	      id : 'onIceCandidateCam',
 	      candidate : candidate
 	   }
 	   sendMessage(message);
 }
 
+function onIceCandidateScreen(candidate){
+	console.log('Local screen candidate' + JSON.stringify(candidate));
+	
+	var message = { 
+		id : 'onIceCandidateScreen',
+		candidate : candidate
+	}	
+	sendMessage(message);
+}
+
 function stop() {
-	if (webRtcPeer) {
+	if (webRtcPeerCam) {
 		var message = {
 				id : 'stop'
 		}
@@ -324,17 +396,21 @@ function stop() {
 }
 
 function dispose() {
-	if (webRtcPeer) {
-		webRtcPeer.dispose();
-		webRtcPeer = null;
+	if (webRtcPeerCam) {
+		webRtcPeerCam.dispose();
+		webRtcPeerCam = null;
+		
+		webRtcPeerScreen.dispose();
+		webRtcPeerScreen=null; 
 	}
 	hideSpinner(video);
+	hideSpinner(screen);
 	
 }
 function disposeScreenShare() {
-	if (webRtcPeer) {
-		webRtcPeer.dispose();
-		webRtcPeer = null;
+	if (webRtcPeerCam) {
+		webRtcPeerCam.dispose();
+		webRtcPeerCam = null;
 	}
 	hideSpinner(screen);
 }

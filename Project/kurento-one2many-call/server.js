@@ -22,6 +22,7 @@ var kurento = require('kurento-client');
 var fs    = require('fs');
 var https = require('https');
 
+
 //sets kurento client url 8888, kurento client running on port 8888, and access url both on port 8443 
 var argv = minimist(process.argv.slice(2), {
     default: {
@@ -42,11 +43,14 @@ var app = express();
 /*
  * Definition of global variables.
  */
+var viewerCount=0;
 var idCounter = 0;
-var candidatesQueue = {};
+var candidatesQueueCam = {};
+var candidatesQueueScreen = {};
 var kurentoClient = null;
 var presenter = null;
 var viewers = [];
+var viewer = null;
 var noPresenterMessage = 'No active presenter. Try again later...';
 
 /*
@@ -99,7 +103,7 @@ wss.on('connection', function(ws) {
         //dealing with messages passed on websocket
         switch (message.id) {
         case 'presenter':
-			startPresenter(sessionId, ws, message.sdpOffer, function(error, sdpAnswer) { // starts presenter by sending sessionID, websocket and sdpoffer
+			startPresenter(sessionId, ws, message.pSdpOfferCam, message.pSdpOfferScreen, function(error, pSdpAnswerCam, pSdpAnswerScreen) { // starts presenter by sending sessionID, websocket and sdpoffer
 				if (error) {
 					return ws.send(JSON.stringify({
 						id : 'presenterResponse',
@@ -110,13 +114,14 @@ wss.on('connection', function(ws) {
 				ws.send(JSON.stringify({
 					id : 'presenterResponse',
 					response : 'accepted',
-					sdpAnswer : sdpAnswer
+					pSdpAnswerCam : pSdpAnswerCam,
+					pSdpAnswerScreen : pSdpAnswerScreen
 				}));
 			});
 			break;
 
         case 'viewer':
-			startViewer(sessionId, ws, message.sdpOffer, function(error, sdpAnswer) {
+			startViewer(sessionId, ws, message.vSdpOfferCam, message.vSdpOfferScreen, function(error, vSdpAnswerCam, vSdpAnswerScreen) {
 				if (error) {
 					return ws.send(JSON.stringify({
 						id : 'viewerResponse',
@@ -124,23 +129,31 @@ wss.on('connection', function(ws) {
 						message : error
 					}));
 				}
-
-				ws.send(JSON.stringify({
-					id : 'viewerResponse',
-					response : 'accepted',
-					sdpAnswer : sdpAnswer
-				}));
-			});
+					ws.send(JSON.stringify({
+						id : 'viewerResponse',
+						response : 'accepted',
+						vSdpAnswerCam : vSdpAnswerCam,
+						vSdpAnswerScreen : vSdpAnswerScreen
+					}));	
+				});
 			break;
 
         case 'stop':
             stop(sessionId);
             break;
 
-        case 'onIceCandidate':
-            onIceCandidate(sessionId, message.candidate);
+        case 'onIceCandidateCam':
+            onIceCandidateCam(sessionId, message.candidate);
             break;
-
+            
+		case 'onIceCandidateScreen':
+			onIceCandidateScreen(sessionId, message.candidate);
+			break;
+			
+		case 'errorSendOffer':
+			console.log('Error offer not send by the presenter: ' + message.errorOffer);
+			break;
+			
         default:
             ws.send(JSON.stringify({
                 id : 'error',
@@ -173,25 +186,29 @@ function getKurentoClient(callback) {
     });
 }
 
-function startPresenter(sessionId, ws, sdpOffer, callback) {
+function startPresenter(sessionId, ws, pSdpOfferCam, pSdpOfferScreen, callback) {
 	clearCandidatesQueue(sessionId);
-
-	if (presenter !== null) {
+	
+	/*if (presenter !== null) {
 		stop(sessionId);
 		return callback("Another user is currently acting as presenter. Try again later ...");
-	}
-
+	}*/
+	var presenterSdpAnswerCam =null;
+	var presenterSdpAnswerScreen=null;
+	
+	console.log('Starting presenter with sdpOfferCam: ' + pSdpOfferCam + ' and sdpOfferScreen:' + pSdpOfferScreen);
+	
 	presenter = {
 		id : sessionId,
 		pipeline : null,
-		webRtcEndpointCam : null
-		//webRtcEndpointScreen: null
+		webRtcEndpointCam : null,
+		webRtcEndpointScreen: null
 	}
 
 	getKurentoClient(function(error, kurentoClient) {
 		if (error) {
 			stop(sessionId);
-			return callback(error);
+			return callback(error); 
 		}
 
 		if (presenter === null) {
@@ -213,228 +230,154 @@ function startPresenter(sessionId, ws, sdpOffer, callback) {
 			presenter.pipeline = pipeline;
 			
 			//Cam Endpoint
-			pipeline.create('WebRtcEndpoint', function(error, webRtcEndpointCam) {
-				if (error) {
-					stop(sessionId);
-					return callback(error);
-				}
-
-				if (presenter === null) {
-					stop(sessionId);
-					return callback(noPresenterMessage);
-				}
-
-				presenter.webRtcEndpointCam = webRtcEndpointCam;
-				
-
-                if (candidatesQueue[sessionId]) {
-                    while(candidatesQueue[sessionId].length) {
-                        var candidate = candidatesQueue[sessionId].shift();
-                        webRtcEndpointCam.addIceCandidate(candidate);
-                    }
-                }
-
-                webRtcEndpointCam.on('OnIceCandidate', function(event) {
-                    var candidate = kurento.register.complexTypes.IceCandidate(event.candidate);
-                    ws.send(JSON.stringify({
-                        id : 'iceCandidate',
-                        candidate : candidate
-                    }));
-                });
-                
-               
-
-				webRtcEndpointCam.processOffer(sdpOffer, function(error, sdpAnswer) {
+			console.log('Cam Endpoint creation got called');
+			
+				pipeline.create('WebRtcEndpoint', function(error, webRtcEndpointCam) {
 					if (error) {
 						stop(sessionId);
 						return callback(error);
 					}
-
+	
 					if (presenter === null) {
 						stop(sessionId);
 						return callback(noPresenterMessage);
 					}
-
-					callback(null, sdpAnswer);
-				});
-				
-
-                webRtcEndpointCam.gatherCandidates(function(error) {
-                    if (error) {
-                        stop(sessionId);
-                        return callback(error);
-                    }
-                });
-                
-            });
-            /*
-               
-			//Screen Endpoint 
-			pipeline.create('WebRtcEndpoint', function(error, webRtcEndpointScreen) {
-				if (error) {
-					stop(sessionId);
-					return callback(error);
-				}
-
-				if (presenter === null) {
-					stop(sessionId);
-					return callback(noPresenterMessage);
-				}
-
-				presenter.webRtcEndpointScreen = webRtcEndpointScreen;
-
-                if (candidatesQueue[sessionId]) {
-                    while(candidatesQueue[sessionId].length) {
-                        var candidate = candidatesQueue[sessionId].shift();
-                        webRtcEndpointScreen.addIceCandidate(candidate);
-                    }
-                }
-
-                webRtcEndpointScreen.on('OnIceCandidate', function(event) {
-                    var candidate = kurento.register.complexTypes.IceCandidate(event.candidate);
-                    ws.send(JSON.stringify({
-                        id : 'iceCandidate',
-                        candidate : candidate
-                    }));
-                });
-
-				webRtcEndpointScreen.processOffer(sdpOffer, function(error, sdpAnswer) {
+	
+					presenter.webRtcEndpointCam = webRtcEndpointCam;
+					
+	
+	                if (candidatesQueueCam[sessionId]) {
+	                    while(candidatesQueueCam[sessionId].length) {
+	                        var candidate = candidatesQueueCam[sessionId].shift();
+	                        webRtcEndpointCam.addIceCandidate(candidate);
+	                    }
+	                }
+	
+	                webRtcEndpointCam.on('OnIceCandidate', function(event) {
+	                    var candidate = kurento.register.complexTypes.IceCandidate(event.candidate);
+	                    ws.send(JSON.stringify({
+	                        id : 'iceCandidateCam',
+	                        candidate : candidate
+	                    }));
+	                });
+	                
+					webRtcEndpointCam.processOffer(pSdpOfferCam, function(error, sdpAnswerCam) {
+						if (error) {
+							stop(sessionId);
+							return callback(error);
+						}
+	
+						if (presenter === null) {
+							stop(sessionId);
+							return callback(noPresenterMessage);
+						}
+						presenterSdpAnswerCam=sdpAnswerCam;
+						//callback(null, sdpAnswerCam);
+					});
+					
+	
+	                webRtcEndpointCam.gatherCandidates(function(error) {
+	                    if (error) {
+	                        stop(sessionId);
+	                        return callback(error);
+	                    }
+	                });
+	                
+	            });
+	            	
+				//Screen Endpoint 
+				console.log('Screen Endpoint creation got called');
+				pipeline.create('WebRtcEndpoint', function(error, webRtcEndpointScreen) {
+					
+					//error checking
 					if (error) {
 						stop(sessionId);
 						return callback(error);
 					}
-
+	
 					if (presenter === null) {
 						stop(sessionId);
 						return callback(noPresenterMessage);
 					}
-					callback(null, sdpAnswer);
-				});
-
-                webRtcEndpointScreen.gatherCandidates(function(error) {
-                    if (error) {
-                        stop(sessionId);
-                        return callback(error);
-                    }
-                });
-            });*/
-			//Screen endpoint code end
-           
+					//attaching enpoint to presenter object
+					presenter.webRtcEndpointScreen = webRtcEndpointScreen;
+	
+					//adding ice candates to endpoint
+	                if (candidatesQueueScreen[sessionId]) {
+	                    while(candidatesQueueScreen[sessionId].length) {
+	                        var candidate = candidatesQueueScreen[sessionId].shift();
+	                        webRtcEndpointScreen.addIceCandidate(candidate);
+	                      
+	                    }
+	                }
+	                webRtcEndpointScreen.on('OnIceCandidate', function(event) {
+	                    var candidate = kurento.register.complexTypes.IceCandidate(event.candidate);
+	                    ws.send(JSON.stringify({
+	                        id : 'iceCandidateScreen',
+	                        candidate : candidate
+	                    }));
+	                });
+					webRtcEndpointScreen.processOffer(pSdpOfferScreen, function(error, sdpAnswerScreen) {
+						if (error) {
+							stop(sessionId);
+							return callback(error);
+						}
+	
+						if (presenter === null) {
+							stop(sessionId);
+							return callback(noPresenterMessage);
+						}
+						callback(null, presenterSdpAnswerCam, sdpAnswerScreen);
+					});
+	
+	                webRtcEndpointScreen.gatherCandidates(function(error) {
+	                    if (error) {
+	                        stop(sessionId);
+	                        return callback(error);
+	                    }
+	                });
+	            });
+				//Screen endpoint code end	
         });
 	});
 }
             
-            	//Screen Endpoint
-            	/*
-				 webRtcEndpointScreen.on('OnIceCandidate', function(event) {
-                    var candidate = kurento.register.complexTypes.IceCandidate(event.candidate);
-                    ws.send(JSON.stringify({
-                        id : 'iceCandidate',
-                        candidate : candidate
-                    }));
-                    
-                    webRtcEndpointScreen.processOffer(sdpOffer, function(error, sdpAnswer) {
-					if (error) {
-						stop(sessionId);
-						return callback(error);
-					}
-
-					if (presenter === null) {
-						stop(sessionId);
-						return callback(noPresenterMessage);
-					}
-
-					callback(null, sdpAnswer);
-				});
-				 webRtcEndpointScreen.gatherCandidates(function(error) {
-                    if (error) {
-                        stop(sessionId);
-                        return callback(error);
-                    }
-                });
-                     
-            });*/
-               
-			//Screen Endpoint 
-			/*
-			pipeline.create('WebRtcEndpoint', function(error, webRtcEndpointScreen) {
-				if (error) {
-					stop(sessionId);
-					return callback(error);
-				}
-
-				if (presenter === null) {
-					stop(sessionId);
-					return callback(noPresenterMessage);
-				}
-
-				presenter.webRtcEndpointScreen = webRtcEndpointScreen;
-
-                if (candidatesQueue[sessionId]) {
-                    while(candidatesQueue[sessionId].length) {
-                        var candidate = candidatesQueue[sessionId].shift();
-                        webRtcEndpointScreen.addIceCandidate(candidate);
-                    }
-                }
-
-                webRtcEndpointScreen.on('OnIceCandidate', function(event) {
-                    var candidate = kurento.register.complexTypes.IceCandidate(event.candidate);
-                    ws.send(JSON.stringify({
-                        id : 'iceCandidate',
-                        candidate : candidate
-                    }));
-                });
-
-				webRtcEndpointScreen.processOffer(sdpOffer, function(error, sdpAnswer) {
-					if (error) {
-						stop(sessionId);
-						return callback(error);
-					}
-
-					if (presenter === null) {
-						stop(sessionId);
-						return callback(noPresenterMessage);
-					}
-
-					callback(null, sdpAnswer);
-				});
-
-                webRtcEndpointScreen.gatherCandidates(function(error) {
-                    if (error) {
-                        stop(sessionId);
-                        return callback(error);
-                    }
-                });
-            });*/
-			//Screen endpoint code end
-
-function startViewer(sessionId, ws, sdpOffer, callback) {
+function startViewer(sessionId, ws, vSdpOfferCam, vSdpOfferScreen, callback) {
 	clearCandidatesQueue(sessionId);
-
+	
+	console.log('Starting viewer with sdpOfferCam: ' + vSdpOfferCam + ' and sdpOfferScreen:' + vSdpOfferScreen);
+	
+	var viewerSdpAnswerCam =null;
+	var viewerSdpAnswerScreen=null;
+	
+	viewer={
+		webRtcEndpointCam : null,
+		webRtcEndpointScreen : null,
+		ws : ws
+	}
+	
 	if (presenter === null) {
 		stop(sessionId);
 		return callback(noPresenterMessage);
 	}
-
+	
 	//Linking cam endpoints between presenter and viewer
 	presenter.pipeline.create('WebRtcEndpoint', function(error, webRtcEndpointCam) {
 		if (error) {
 			stop(sessionId);
 			return callback(error);
 		}
-		viewers[sessionId] = {
-			"webRtcEndpointCam" : webRtcEndpointCam,
-			"ws" : ws
-		}
-
+		
+		viewer.webRtcEndpointCam=webRtcEndpointCam;
+		
 		if (presenter === null) {
 			stop(sessionId);
 			return callback(noPresenterMessage);
 		}
 
-		if (candidatesQueue[sessionId]) {
-			while(candidatesQueue[sessionId].length) {
-				var candidate = candidatesQueue[sessionId].shift();
+		if (candidatesQueueCam[sessionId]) {
+			while(candidatesQueueCam[sessionId].length) {
+				var candidate = candidatesQueueCam[sessionId].shift();
 				webRtcEndpointCam.addIceCandidate(candidate);
 			}
 		}
@@ -442,12 +385,12 @@ function startViewer(sessionId, ws, sdpOffer, callback) {
         webRtcEndpointCam.on('OnIceCandidate', function(event) {
             var candidate = kurento.register.complexTypes.IceCandidate(event.candidate);
             ws.send(JSON.stringify({
-                id : 'iceCandidate',
+                id : 'iceCandidateCam',
                 candidate : candidate
             }));
         });
 
-		webRtcEndpointCam.processOffer(sdpOffer, function(error, sdpAnswer) {
+		webRtcEndpointCam.processOffer(vSdpOfferCam, function(error, vSdpAnswerCam) {
 			if (error) {
 				stop(sessionId);
 				return callback(error);
@@ -466,8 +409,9 @@ function startViewer(sessionId, ws, sdpOffer, callback) {
 					stop(sessionId);
 					return callback(noPresenterMessage);
 				}
-
-				callback(null, sdpAnswer);
+				
+				viewerSdpAnswerCam=vSdpAnswerCam;
+				//callback(null, vSdpAnswerCam);
 		        webRtcEndpointCam.gatherCandidates(function(error) {
 		            if (error) {
 			            stop(sessionId);
@@ -477,39 +421,37 @@ function startViewer(sessionId, ws, sdpOffer, callback) {
 		    });
 	    });
 	});
+	
+
 	//linking Screen endpoints
-	/*
 		presenter.pipeline.create('WebRtcEndpoint', function(error, webRtcEndpointScreen) {
 		if (error) {
 			stop(sessionId);
 			return callback(error);
 		}
-		viewers[sessionId] = {
-			"webRtcEndpointScreen" : webRtcEndpointScreen,
-			"ws" : ws
-		}
-
+		
+		viewer.webRtcEndpointScreen=webRtcEndpointScreen;
+		
 		if (presenter === null) {
 			stop(sessionId);
 			return callback(noPresenterMessage);
 		}
 
-		if (candidatesQueue[sessionId]) {
-			while(candidatesQueue[sessionId].length) {
-				var candidate = candidatesQueue[sessionId].shift();
+		if (candidatesQueueScreen[sessionId]) {
+			while(candidatesQueueScreen[sessionId].length) {
+				var candidate = candidatesQueueScreen[sessionId].shift();
 				webRtcEndpointScreen.addIceCandidate(candidate);
 			}
 		}
-
         webRtcEndpointScreen.on('OnIceCandidate', function(event) {
             var candidate = kurento.register.complexTypes.IceCandidate(event.candidate);
             ws.send(JSON.stringify({
-                id : 'iceCandidate',
+                id : 'iceCandidateScreen',
                 candidate : candidate
             }));
         });
 
-		webRtcEndpointScreen.processOffer(sdpOffer, function(error, sdpAnswer) {
+		webRtcEndpointScreen.processOffer(vSdpOfferScreen, function(error, vSdpAnswerScreen) {
 			if (error) {
 				stop(sessionId);
 				return callback(error);
@@ -528,8 +470,9 @@ function startViewer(sessionId, ws, sdpOffer, callback) {
 					stop(sessionId);
 					return callback(noPresenterMessage);
 				}
-
-				callback(null, sdpAnswer);
+				
+				callback(null, viewerSdpAnswerCam, vSdpAnswerScreen);
+				
 		        webRtcEndpointScreen.gatherCandidates(function(error) {
 		            if (error) {
 			            stop(sessionId);
@@ -538,20 +481,28 @@ function startViewer(sessionId, ws, sdpOffer, callback) {
 		        });
 		    });
 	    });
-	});*/
+	});
 	//end of Screen endpoint link
+	viewers[sessionId] = viewer;
+	
+	viewerCount++;
+	console.log("Viewer has joined current = Viewer Count: " + viewerCount);
+	
 }
 
 function clearCandidatesQueue(sessionId) {
-	if (candidatesQueue[sessionId]) {
-		delete candidatesQueue[sessionId];
+	if (candidatesQueueCam[sessionId]) {
+		delete candidatesQueueCam[sessionId];
+	}
+	if (candidatesQueueScreen[sessionId]) {
+		delete candidatesQueueScreen[sessionId];
 	}
 }
 
 function stop(sessionId) {
 	if (presenter !== null && presenter.id == sessionId) {
 		for (var i in viewers) {
-			var viewer = viewers[i];
+			 viewer = viewers[i];
 			if (viewer.ws) {
 				viewer.ws.send(JSON.stringify({
 					id : 'stopCommunication'
@@ -562,36 +513,105 @@ function stop(sessionId) {
 		presenter = null;
 		viewers = [];
 
-	} else if (viewers[sessionId]) {
+	}else if(viewers[sessionId]){
 		viewers[sessionId].webRtcEndpointCam.release();
-		//viewers[sessionId].webRtcEndpointScreen.release();
+		viewers[sessionId].webRtcEndpointScreen.release();
 		delete viewers[sessionId];
 	}
-
+	
 	clearCandidatesQueue(sessionId);
+	console.log("Viewer has left current = Viewer Count: " + viewerCount);
 }
-
-function onIceCandidate(sessionId, _candidate) {
+/*
+function onIceCandidateCam(sessionId, _candidate) {
     var candidate = kurento.register.complexTypes.IceCandidate(_candidate);
 
     if (presenter && presenter.id === sessionId && presenter.webRtcEndpointCam ) { //&& presenter.webRtcEndpointScreen
-        console.info('Sending presenter candidate');
+        console.info('Sending presenter cam candidate');
         presenter.webRtcEndpointCam.addIceCandidate(candidate);
      	//presenter.webRtcEndpointScreen.addIceCandidate(candidate);
            
-    }
-    else if (viewers[sessionId] && viewers[sessionId].webRtcEndpointCam  ) { //&&viewers[sessionId].webRtcEndpointScreen
-        console.info('Sending viewer candidate');
+    }else if(presenter && presenter.id === sessionId && presenter.webRtcEndpointScreen ) {
+	    presenter.webRtcEndpointScreen.addIceCandidate(candidate);
+    }else if (viewers[sessionId] && viewers[sessionId].webRtcEndpointCam  ) { //&&viewers[sessionId].webRtcEndpointScreen
+        console.info('Sending viewer cam candidate');
         viewers[sessionId].webRtcEndpointCam.addIceCandidate(candidate);
        // viewers[sessionId].webRtcEndpointScreen.addIceCandidate(candidate);
+    }else if(viewers[sessionId] && viewers[sessionId].webRtcEndpointScreen ){
+	 viewers[sessionId].webRtcEndpointScreen.addIceCandidate(candidate);
+	    
+    } else {
+        console.info('Queueing candidate');
+        if (!candidatesQueueCam[sessionId]) {
+            candidatesQueueCam[sessionId] = [];
+        }
+        candidatesQueueCam[sessionId].push(candidate);
+    }
+}*/
+function onIceCandidateCam(sessionId, _candidate) {
+    var candidate = kurento.register.complexTypes.IceCandidate(_candidate);
+
+    if (presenter && presenter.id === sessionId && presenter.webRtcEndpointCam) {
+        console.info('Sending presenter cam candidate');
+        presenter.webRtcEndpointCam.addIceCandidate(candidate);
+    }
+    else if (viewers[sessionId] && viewers[sessionId].webRtcEndpointCam) {
+        console.info('Sending viewer scam candidate');
+        viewers[sessionId].webRtcEndpointCam.addIceCandidate(candidate);
     }
     else {
+        console.info('Queueing candidate');
+        if (!candidatesQueueCam[sessionId]) {
+            candidatesQueueCam[sessionId] = [];
+        }
+        candidatesQueueCam[sessionId].push(candidate);
+    }
+}
+function onIceCandidateScreen(sessionId, _candidate) {
+    var candidate = kurento.register.complexTypes.IceCandidate(_candidate);
+
+    if (presenter && presenter.id === sessionId && presenter.webRtcEndpointScreen) {
+        console.info('Sending presenter screen candidate');
+        presenter.webRtcEndpointScreen.addIceCandidate(candidate);
+    }
+    else if (viewers[sessionId] && viewers[sessionId].webRtcEndpointScreen) {
+        console.info('Sending viewer screen candidate');
+        viewers[sessionId].webRtcEndpointScreen.addIceCandidate(candidate);
+    }
+    else {
+        console.info('Queueing candidate');
+        if (!candidatesQueueScreen[sessionId]) {
+            candidatesQueueScreen[sessionId] = [];
+        }
+        candidatesQueueScreen[sessionId].push(candidate);
+    }
+}
+
+/*
+function onIceCandidateScreen(sessionId, _candidate) {
+    var candidate = kurento.register.complexTypes.IceCandidate(_candidate);
+
+    if (presenter && presenter.id === sessionId && presenter.webRtcEndpointScreen ) { //&& presenter.webRtcEndpointScreen
+        console.info('Sending presenter screen candidate');
+        presenter.webRtcEndpointCam.addIceCandidate(candidate);
+     	//presenter.webRtcEndpointScreen.addIceCandidate(candidate);
+           
+    }else if(presenter && presenter.id === sessionId && presenter.webRtcEndpointScreen ) {
+	    presenter.webRtcEndpointScreen.addIceCandidate(candidate);
+    }else if (viewers[sessionId] && viewers[sessionId].webRtcEndpointCam  ) { //&&viewers[sessionId].webRtcEndpointScreen
+        console.info('Sending viewer screen candidate');
+        viewers[sessionId].webRtcEndpointCam.addIceCandidate(candidate);
+       // viewers[sessionId].webRtcEndpointScreen.addIceCandidate(candidate);
+    }else if(viewers[sessionId] && viewers[sessionId].webRtcEndpointScreen ){
+	 viewers[sessionId].webRtcEndpointScreen.addIceCandidate(candidate);
+	    
+    } else {
         console.info('Queueing candidate');
         if (!candidatesQueue[sessionId]) {
             candidatesQueue[sessionId] = [];
         }
-        candidatesQueue[sessionId].push(candidate);
+        candidatesQueueScreen[sessionId].push(candidate);
     }
-}
+}*/
 
 app.use(express.static(path.join(__dirname, 'static')));
