@@ -17,7 +17,10 @@ var ws = new WebSocket('wss://' + location.host + '/one2many');
 var video;
 var screen;
 var webRtcPeer;
-var extensionInstalled =false;
+// variables for getScreenConstraint fnc()
+var chromeMediaSource = 'screen';
+//var sourceId;
+var extensionInstalled = false;
 
 window.onload = function() {
 	console = new Console();
@@ -27,7 +30,7 @@ window.onload = function() {
 	document.getElementById('call').addEventListener('click', function() { presenter(); } );
 	document.getElementById('viewer').addEventListener('click', function() { viewer(); } );
 	document.getElementById('terminate').addEventListener('click', function() { stop(); } );
-	document.getElementById('screenstart').addEventListener('click', function() { screenShare(); } );
+	document.getElementById('screenstart').addEventListener('click', function() { startScreenStreamFrom(); } );
 	//document.getElementById('screenstart').addEventListener('click'), function(){ screenShare(); } );
 	//document.getElementById('screenstop').addEventListener('click'), function() { stopScreenShare(); } );
 }
@@ -45,6 +48,10 @@ window.addEventListener('message', function(event) {
   // user chose a stream
   if (event.data.type && (event.data.type === 'SS_DIALOG_SUCCESS')) {
     startScreenStreamFrom(event.data.streamId);
+    sourceId = event.data.streamId;
+    window.idSource=event.data.streamId;
+    console.log('StreamID: 1 value'+event.data.streamId);
+     console.log('StreamID:2 value'+event.data.streamId);
   }
 
   // user clicked on 'cancel' in choose media dialog
@@ -52,6 +59,79 @@ window.addEventListener('message', function(event) {
     console.log('User cancelled!');
   }
 });
+/*
+window.getScreenConstraints('screen', function (error, constraints_) {
+                if (error)
+                    return callback(error);
+                constraints = [mediaConstraints];
+                constraints.unshift(constraints_);
+                getMedia(recursive.apply(undefined, constraints));
+            }, guid);
+*/
+var isFirefox = typeof window.InstallTrigger !== 'undefined';
+var isOpera = !!window.opera || navigator.userAgent.indexOf(' OPR/') >= 0;
+var isChrome = !!window.chrome && !isOpera;
+
+ 
+// getScreenConstraint Function
+/*function getScreenConstraints(callback) {
+    var firefoxScreenConstraints = {
+        mozMediaSource: 'window',
+        mediaSource: 'window'
+    };
+    
+    if(isFirefox) return callback(null, firefoxScreenConstraints);
+
+    // this statement defines getUserMedia constraints
+    // that will be used to capture content of screen
+    var screen_constraints = {
+        mandatory: {
+            chromeMediaSource: chromeMediaSource,
+            maxWidth: screen.width > 1920 ? screen.width : 1920,
+            maxHeight: screen.height > 1080 ? screen.height : 1080
+        },
+        optional: []
+    };
+
+    // this statement verifies chrome extension availability
+    // if installed and available then it will invoke extension API
+    // otherwise it will fallback to command-line based screen capturing API
+    if (chromeMediaSource == 'desktop' && !sourceId) {
+        getSourceId(function() {
+            screen_constraints.mandatory.chromeMediaSourceId = sourceId;
+            callback(sourceId == 'PermissionDeniedError' ? sourceId : null, screen_constraints);
+        });
+        return;
+    }
+
+    // this statement sets gets 'sourceId" and sets "chromeMediaSourceId" 
+    if (chromeMediaSource == 'desktop') {
+        screen_constraints.mandatory.chromeMediaSourceId = sourceId;
+    }
+
+    // now invoking native getUserMedia API
+   // callback(null, screen_constraints);
+}*/
+/*
+function getScreenConstraints(sourceId) {
+        var screen_constraints = {
+            audio: false,
+            video: {
+                mandatory: {
+                    chromeMediaSource: chromeMediaSource,
+                    maxWidth: window.screen.width > 1920 ? window.screen.width : 1920,
+                    maxHeight: window.screen.height > 1080 ? window.screen.height : 1080
+                },
+                optional: []
+            }
+        };
+
+        if (sourceId) {
+            screen_constraints.video.mandatory.chromeMediaSourceId = sourceId;
+        }
+  return screen_constraints;
+}*/
+
 
 window.onbeforeunload = function() {
 	ws.close();
@@ -100,6 +180,7 @@ function viewerResponse(message) {
 }
 
 function presenter() {
+	
 	if (!webRtcPeer) {
 		showSpinner(video);
 
@@ -113,8 +194,34 @@ function presenter() {
 
 			this.generateOffer(onOfferPresenter);
 		});
+		
+		//startScreenStreamFrom();
 	}
-}
+}/*
+		if(!webRtcPeer){
+		showSpinner(video);
+		var options = {
+			localVideo: video,
+			oniceCandidate : onIceCandidate,
+			mediaConstraints:{
+			audio: true,
+			video:{
+				mandatory:{
+					maxWidth: window.screen.width,
+        			maxHeight: window.screen.height
+				},
+				mediaSource: 'desktop',
+				chromeMediaSource: 'screen',
+			}	
+		}
+	}
+	webRtcPeer = kurentoUtils.WebRtcPeer.WebRtcPeerSendonly(options, function(error) {
+			if(error) return onError(error);
+
+			this.generateOffer(onOfferPresenter);
+		});
+	}*/
+
 
 function onOfferPresenter(error, offerSdp) {
     if (error) return onError(error);
@@ -131,7 +238,7 @@ function viewer() {
 		showSpinner(video);
 
 		var options = {
-			remoteVideo: video,
+			remoteVideo: screen,
 			onicecandidate : onIceCandidate
 		}
 
@@ -142,59 +249,48 @@ function viewer() {
 		});
 	}
 }
-function screenShare(){
 
-	//check if extension is installed
-	if (!extensionInstalled) {
-    var message = 'Please install the extension:\n' +
-                  '1. Go to chrome://extensions\n' +
-                  '2. Check: "Enable Developer mode"\n' +
-                  '3. Click: "Load the unpacked extension..."\n' +
-                  '4. Choose "extension" folder from the repository\n' +
-                  '5. Reload this page';
-    alert(message);
-  }
-  window.postMessage({type: 'SS_UI_REQUEST', text: 'start'}, '*');
+//streamId for streaming
+function startScreenStreamFrom() {
 
-	if (!webRtcPeer) {
-		showSpinner(screen);
-
+   getSourceId(function(sourceId){
+		
+		var screen_constraints = {
+			audio:false,
+			video:{
+				mandatory:{
+					chromeMediaSource: 'desktop',// error ? 'screen' : 'desktop',
+					maxWidth: 1920,
+					maxHeight: 1080,
+					chromeMediaSourceId: sourceId
+				},
+				optional:[]
+			}
+		}
+			
+			console.log("xxxx-sourceID:"+ JSON.stringify(sourceId, null, 4));
+			console.log("xxxx-constraints:"+ JSON.stringify(screen_constraints, null, 4));
+			
+			
 		var options = {
-			localVideo: video,
-			onicecandidate : onIceCandidate
-	    }
+				   localVideo : screen,
+				   onicecandidate : onIceCandidate,
+				   mediaConstraints : screen_constraints,
+				   sendSource : 'screen'
+			 	};
+			
+				webRtcPeer = kurentoUtils.WebRtcPeer.WebRtcPeerSendonly(options, function(error) {
+					if(error) return onError(error);
+		
+					this.generateOffer(onOfferPresenter);
+				});
+			
+			});
 
-		webRtcPeer = kurentoUtils.WebRtcPeer.WebRtcPeerSendonly(options, function(error) {
-			if(error) return onError(error);
-
-			this.generateOffer(onOfferPresenter);
-		});
-	}
-
-}
-
-function startScreenStreamFrom(streamId) {
-  navigator.webkitGetUserMedia({
-    audio: false,
-    video: {
-      mandatory: {
-        chromeMediaSource: 'desktop',
-        chromeMediaSourceId: streamId,
-        maxWidth: window.screen.width,
-        maxHeight: window.screen.height
-      }
-    }
-  },
-  // successCallback
-  function(screenStream) {
-    var videoElement = document.getElementById('screen');
-    videoElement.src = URL.createObjectURL(screenStream);
-    videoElement.play();
-  },
-  // errorCallback
-  function(err) {
-    console.log('getUserMedia failed!: ' + err);
-  });
+			var constraints = window.getScreenShare;
+			console.log("Constrains to be passed:"+ JSON.stringify(constraints, null, 4));
+			console.log("Constrains Extension installed:"+ JSON.stringify(extensionInstalled, null, 4));
+	
 }
 
 function onOfferViewer(error, offerSdp) {
@@ -233,6 +329,7 @@ function dispose() {
 		webRtcPeer = null;
 	}
 	hideSpinner(video);
+	
 }
 function disposeScreenShare() {
 	if (webRtcPeer) {
