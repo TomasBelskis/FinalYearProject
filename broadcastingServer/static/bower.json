@@ -1,0 +1,28 @@
+{
+  "name": "Broadcasting server",
+  "description": "Broadcasting server",
+  "authors": [
+    "Tomas Belskis"
+  ],
+  "main": "index.html",
+  "moduleType": [
+    "globals"
+  ],
+  "license": "MIT",
+  "homepage": "none",
+  "private": true,
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "test",
+    "tests"
+  ],
+  "dependencies": {
+    "adapter.js": "*",
+    "bootstrap": "~3.3.0",
+    "ekko-lightbox": "~3.3.0",
+    "demo-console": "1.5.1",
+    "kurento-utils": "master"
+  }
+}

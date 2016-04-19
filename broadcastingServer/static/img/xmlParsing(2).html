@@ -1,0 +1,55 @@
+<html>
+<script type='text/javascript'>
+
+/// Load XML file...
+var doc = new ActiveXObject( "Microsoft.XMLDOM" );
+doc.async = false;
+doc.load("order.xml");
+
+var error = doc.parseError;
+if (error != "")
+{
+alert(error.reason);
+}
+
+/// Write HTML output...
+document.write("<b>XML Root Tag Name: " + doc.documentElement.tagName + "<br/><br/></b>");
+
+var rootChildren = doc.documentElement.childNodes;
+var orderTotal = 0.00;
+ 
+/// Loop all elements...
+for (i=0; i<rootChildren.length; i++) {
+  document.write("<br>" + rootChildren[i].tagName + ": ");
+  
+  var subChildren = rootChildren[i].childNodes; 
+  var qty = 0;
+  
+  /// Every element will have at least one child node (the text value)...
+  for (j=0; j<subChildren.length; j++) {
+    
+	/// If we have child elements, parse them...
+	if (subChildren[j].hasChildNodes()){
+	  document.write("<br/>&nbsp;&nbsp;&nbsp;" + subChildren[j].tagName + ": <i><b>" +
+									subChildren[j].firstChild.nodeValue + "</b></i>");	
+									
+	  /// Add to running total...							
+	  if (subChildren[j].tagName == "quantity")			{
+		//alert(subChildren[j].tagName + " " + subChildren[j].firstChild.nodeValue);
+		qty = subChildren[j].firstChild.nodeValue;
+	  }
+	  if (subChildren[j].tagName == "price")			{
+		//alert(subChildren[j].tagName + " " + subChildren[j].firstChild.nodeValue);
+		orderTotal += (qty * subChildren[j].firstChild.nodeValue);
+		
+	  }	  
+	}
+	/// If there are no child elements, this node is the text value...
+	else
+	  document.write("<i><b>" + subChildren[j].nodeValue + "</b></i>");	
+  }
+}
+document.write("<br/><br/><i><b>Order Total: " + orderTotal.toFixed(2) + "</b></i>");
+
+</script>
+</html>

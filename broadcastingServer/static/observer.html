@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="cache-control" content="no-cache">
+    <meta http-equiv="pragma" content="no-cache">
+    <meta http-equiv="expires" content="0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="shortcut icon" href="img/kurento.png" type="image/png" />
+
+    <link rel="stylesheet" href="bower_components/bootstrap/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="bower_components/demo-console/index.css">
+    <link rel="stylesheet" href="css/observer.css">
+    <link rel="stylesheet" href="//code.jquery.com/ui/1.11.4/themes/smoothness/jquery-ui.css">
+	<script src="bower_components/demo-console/index.js"></script>
+	<script src="//code.jquery.com/jquery-1.10.2.js"></script>
+	<script src="//code.jquery.com/ui/1.11.4/jquery-ui.js"></script> 
+    <script src="bower_components/adapter.js/adapter.js"></script>
+    <script src="bower_components/jquery/dist/jquery.min.js"></script>
+    <script src="bower_components/bootstrap/dist/js/bootstrap.min.js"></script>
+    <script src="bower_components/kurento-utils/js/kurento-utils.js"></script>
+    <script src="js/control.js"></script>
+  </head>
+  <body>
+	<a id="observe" href="#" class ="btn btn-success">
+	           <span class="glyphicon glyphicon-play"></span>Observe</a>
+	<a id="resetViewers" href="#" class ="btn btn-success">
+	           <span class="glyphicon glyphicon-play"></span>Reset Viewers</a>
+	        
+	<br>
+	<div id="client_list"></div>
+	
+	 <div id="present" style="display: none"></div>
+	 <div id="cameraStart" style="display: none"></div>
+	 <div id="screenStart" style="display: none"></div>
+	 <div id="video" style="display: none"></div>
+	 <div id="screen" style="display: none"></div>
+	 <div id="renderContainer"style="display: none" ></div>
+	 <div id="fileContainer" style="display: none"></div>
+	 <div id="chatBox" style="display: none"></div>
+	 <div id="c_message" style="display: none"></div>
+	 <div id="terminate" style="display: none"></div>
+	 <div id="viewer" style="display: none"></div>
+	 <div id="send" style="display: none"></div>
+	 <div id="extensionCall" style="display: none"></div>
+	 <div id="submitButton" style="display: none"></div>
+	 
+	 <div id="console" class="democonsole" style="visibility: hidden; display: none"></div>
+	 
+ </body>
+</html>

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="cache-control" content="no-cache">
+    <meta http-equiv="pragma" content="no-cache">
+    <meta http-equiv="expires" content="0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="shortcut icon" href="img/kurento.png" type="image/png" />
+	 
+	<link rel="chrome-webstore-item" href="https://chrome.google.com/webstore/detail/oliililfkabgjohplcjnhjllncchjeio">
+    <link rel="stylesheet" href="bower_components/bootstrap/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="css/index.css">
+    <link rel="stylesheet" href="//code.jquery.com/ui/1.11.4/themes/smoothness/jquery-ui.css">
+    
+    <script src="bower_components/bootstrap/dist/js/bootstrap.min.js"></script>
+ 
+  </head>
+  <body>
+	           
+	<div class="container-fluid text-center">    
+	  <div class="row content">
+		  <h1>Educational TV</h1>
+	    <div class="col-sm-12"> 
+	     <img src="images/classroom.gif" >
+		 <div class=="row content">
+			 <div class="col-sm-12">
+			 	<a href="https://52.49.81.164:8443/index.html" class ="btn btn-success">Presenter</a>
+			 	<a href="channels.html" class ="btn btn-success">Viewer</a>
+			 	<a href="https://52.49.81.164:8443/observer.html" class ="btn btn-success">Control</a>
+			</div>
+	    </div>
+	  </div>
+	</div>
+
+	<footer class="container-fluid text-center">
+	 	<footer>
+		<button class="btn btn-success" onclick="chrome.webstore.install()" id="install-button">Install Screen Capture Extension</button>
+		<script>
+			if (chrome.app.isInstalled) {
+				document.getElementById('install-button').style.display = 'none';
+			}
+		</script>
+	</footer>
+	</footer>
+	 
+ </body>
+</html>

@@ -1,0 +1,62 @@
+/*Channel server index.css*/
+
+@CHARSET "UTF-8";
+
+* {
+   margin: 0px;
+   padding: 0px;
+}
+
+html {
+	position: relative;
+	min-height: 100%;
+	padding: 0 !important;
+	margin: 0 !important;
+}
+
+body {
+	padding: 0 !important;
+	margin: 0 !important;
+	background-color: #19314b;
+	color: #e9e9e9
+}
+iframe{
+	display: none;
+}
+img {
+	font-size: 14px;
+	line-height: 1.42857143;
+	color: #555;
+	background-color: #fff;
+	background-image: none;
+	border: 1px solid #ccc;
+	border-radius: 4px;
+	-webkit-box-shadow: inset 0 1px 1px rgba(0, 0, 0, .075);
+	box-shadow: inset 0 1px 1px rgba(0, 0, 0, .075);
+	-webkit-transition: border-color ease-in-out .15s, box-shadow
+		ease-in-out .15s;
+	transition: border-color ease-in-out .15s, box-shadow ease-in-out .15s;
+}
+
+.col-md-12{
+	clear: left;
+}
+.top-buffer{
+	margin-top: 20px;
+}
+#clear{
+	clear: both;
+}
+
+
+
+.col:not(:first-child),.col:not(:last-child) {
+  padding-right:7px;
+  padding-left:7px;
+}
+
+div.dragged {
+	cursor: all-scroll !important;
+	border-color: blue !important;
+	z-index: 10 !important;
+}
